@@ -11,6 +11,7 @@ import inspect
 import traceback
 import warnings
 import queue
+import json
 
 from IPython import get_ipython
 from IPython.display import IFrame, display
@@ -31,6 +32,15 @@ def _get_skip(error: Exception):
             break
     return skip
 
+def is_sagemaker_instance():
+    log_path = '/opt/ml/metadata/resource-metadata.json'
+    if os.path.exists(log_path):
+        with open(log_path, 'r') as logs:
+            _logs = json.load(logs)
+        if 'ResourceArn' in _logs.keys():
+            return True
+    return False
+
 
 class JupyterDash(dash.Dash):
     """A Dash subclass for developing Dash apps interactively in Jupyter.
@@ -48,6 +58,7 @@ class JupyterDash(dash.Dash):
     default_server_url = None
     _in_ipython = get_ipython() is not None
     _in_colab = "google.colab" in sys.modules
+    _in_sagemaker = is_sagemaker_instance()
     _token = str(uuid.uuid4())
 
     _server_threads = {}
@@ -100,6 +111,20 @@ class JupyterDash(dash.Dash):
                             prop=prop
                         )
                     )
+        if JupyterDash._in_sagemaker:
+            unsupported_colab_props = [
+                'requests_pathname_prefix',
+                'routes_pathname_prefix',
+                'url_base_pathname'
+            ]
+            for prop in unsupported_colab_props:
+                if prop in kwargs:
+                    kwargs.pop(prop)
+                    warnings.warn(
+                        "The {prop} argument is ignored when running in SageMaker Studio".format(
+                            prop=prop
+                        )
+                    )
 
         # Call superclass constructor
         super(JupyterDash, self).__init__(name=name, **kwargs)
@@ -137,6 +162,9 @@ class JupyterDash(dash.Dash):
                 server_url = 'https://' + domain_base
         elif JupyterDash._in_colab:
             warnings.warn("The server_url argument is ignored when running in Colab")
+            server_url = None
+        elif JupyterDash._in_sagemaker:
+            warnings.warn("The server_url argument is ignored when running in SageMaker Studio")
             server_url = None
 
         self.server_url = server_url
@@ -193,7 +221,7 @@ class JupyterDash(dash.Dash):
         kwargs['port'] = port
 
         # Validate / infer display mode
-        if JupyterDash._in_colab:
+        if JupyterDash._in_colab or JupyterDash._in_sagemaker:
             valid_display_values = ["inline", "external"]
         else:
             valid_display_values = ["jupyterlab", "inline", "external"]
@@ -368,6 +396,8 @@ class JupyterDash(dash.Dash):
 
             if JupyterDash._in_colab:
                 self._display_in_colab(dashboard_url, port, mode, width, height)
+            elif JupyterDash._in_sagemaker:
+                self._display_in_sagemaker(dashboard_url, port, mode, width, height)
             else:
                 self._display_in_jupyter(dashboard_url, port, mode, width, height)
         except Exception as final_error:
@@ -385,6 +415,47 @@ class JupyterDash(dash.Dash):
             # Display a hyperlink that can be clicked to open Dashboard
             print("Dash app running on:")
             output.serve_kernel_port_as_window(port, anchor_text=dashboard_url)
+    
+    def _display_in_sagemaker(self, dashboard_url, port, mode, width, height):
+        print("not working")
+        if mode == 'inline':
+            print("inline")
+            code = """(async (port, path, width, height, cache, element) => {
+                if (!cache) {
+                return;
+                }
+                element.appendChild(document.createTextNode(''));
+                const url = await google.colab.kernel.proxyPort(port, {cache});
+                const iframe = document.createElement('iframe');
+                iframe.src = new URL(path, url).toString();
+                iframe.height = height;
+                iframe.width = width;
+                iframe.style.border = 0;
+                element.appendChild(iframe);
+            })""" + '({port}, {path}, {width}, {height}, {cache}, window.element)'.format(
+                port=port,
+                path=json.dumps(path),
+                width=json.dumps(width),
+                height=json.dumps(height),
+                cache=json.dumps(False))
+            display.display(display.Javascript(code))
+        elif mode == 'external':
+            print("Dash app running on:")
+            if not anchor_text:
+                anchor_text = 'https://localhost:{port}{path}'.format(port=port, path=path)
+
+            code = """(async (port, path, text, element) => {
+                element.appendChild(document.createTextNode(''));
+                const url = await google.colab.kernel.proxyPort(port);
+                const anchor = document.createElement('a');
+                anchor.href = new URL(path, url).toString();
+                anchor.target = '_blank';
+                anchor.setAttribute('data-href', url + path);
+                anchor.textContent = text;
+                element.appendChild(anchor);
+            })""" + '({port}, {path}, {text}, window.element)'.format(
+                port=port, path=json.dumps(path), text=json.dumps(anchor_text))
+            display.display(display.Javascript(code))
 
     def _display_in_jupyter(self, dashboard_url, port, mode, width, height):
         if mode == 'inline':
