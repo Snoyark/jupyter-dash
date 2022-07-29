@@ -417,6 +417,7 @@ class JupyterDash(dash.Dash):
             output.serve_kernel_port_as_window(port, anchor_text=dashboard_url)
     
     def _display_in_sagemaker(self, dashboard_url, port, mode, width, height):
+        path='/'
         if mode == 'inline':
             print("inline")
             code = """(async (port, path, width, height, cache, element) => {
