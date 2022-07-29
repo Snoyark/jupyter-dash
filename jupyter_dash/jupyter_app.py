@@ -14,7 +14,7 @@ import queue
 import json
 
 from IPython import get_ipython
-from IPython.display import IFrame, display
+from IPython.display import IFrame, display, Javascript
 from IPython.core.ultratb import FormattedTB
 from ansi2html import Ansi2HTMLConverter
 import uuid
@@ -438,7 +438,7 @@ class JupyterDash(dash.Dash):
                 width=json.dumps(width),
                 height=json.dumps(height),
                 cache=json.dumps(False))
-            display.display(display.Javascript(code))
+            display(Javascript(code))
         elif mode == 'external':
             print("Dash app running on:")
             if not dashboard_url:
@@ -455,7 +455,7 @@ class JupyterDash(dash.Dash):
                 element.appendChild(anchor);
             })""" + '({port}, {path}, {text}, window.element)'.format(
                 port=port, path=json.dumps(path), text=json.dumps(dashboard_url))
-            display.display(display.Javascript(code))
+            display(Javascript(code))
 
     def _display_in_jupyter(self, dashboard_url, port, mode, width, height):
         if mode == 'inline':
