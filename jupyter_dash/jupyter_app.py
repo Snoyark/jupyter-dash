@@ -417,7 +417,6 @@ class JupyterDash(dash.Dash):
             output.serve_kernel_port_as_window(port, anchor_text=dashboard_url)
     
     def _display_in_sagemaker(self, dashboard_url, port, mode, width, height):
-        print("not working")
         if mode == 'inline':
             print("inline")
             code = """(async (port, path, width, height, cache, element) => {
@@ -441,8 +440,8 @@ class JupyterDash(dash.Dash):
             display.display(display.Javascript(code))
         elif mode == 'external':
             print("Dash app running on:")
-            if not anchor_text:
-                anchor_text = 'https://localhost:{port}{path}'.format(port=port, path=path)
+            if not dashboard_url:
+                dashboard_url = 'https://localhost:{port}{path}'.format(port=port, path=path)
 
             code = """(async (port, path, text, element) => {
                 element.appendChild(document.createTextNode(''));
@@ -454,7 +453,7 @@ class JupyterDash(dash.Dash):
                 anchor.textContent = text;
                 element.appendChild(anchor);
             })""" + '({port}, {path}, {text}, window.element)'.format(
-                port=port, path=json.dumps(path), text=json.dumps(anchor_text))
+                port=port, path=json.dumps(path), text=json.dumps(dashboard_url))
             display.display(display.Javascript(code))
 
     def _display_in_jupyter(self, dashboard_url, port, mode, width, height):
